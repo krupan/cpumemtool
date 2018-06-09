@@ -7,7 +7,7 @@
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 //
-
+#include <assert.h>
 #include <cstdlib>
 #include <iostream>
 #include <boost/bind.hpp>
@@ -38,14 +38,71 @@ public:
     }
 
 private:
+    // adds a null terminator so we can use string functions:
+    int input_to_string(char *input)
+    {
+        for(size_t i = 0; i < max_length; i++)
+        {
+            if(input[i] == '\n')
+            {
+                input[i] = 0;
+                return 0;
+            }
+        }
+        // if we got here there was no '\n' in input :-(
+        return 1;
+    }
+
+    // returns the new message length
+    int get_cpu_load(char *data)
+    {
+        snprintf(data, max_length, "cpu load will go here\n");
+        return strlen(data);
+    }
+
+    // returns the new message length
+    int get_mem(char *data)
+    {
+        snprintf(data, max_length, "mem usage will go here\n");
+        return strlen(data);
+    }
+
     void handle_read(const boost::system::error_code& error,
                      size_t bytes_transferred)
     {
         if (!error)
         {
+            size_t response_len;
             std::cout << "handle_read, bytes_transferred: " << bytes_transferred << "\n";
+            int err = input_to_string(data_);
+            if(err)
+            {
+                // TODO: define tcp response for malformed input
+                std::cerr << "input needs to end in \\n\n";
+                snprintf(data_, empty_length + 1, "\n");
+                assert(empty_length == strlen(data_));
+                response_len = empty_length;
+            }
+            std::cout << "data_: " << data_ << "\n";
+            if(strncmp("cpu", data_, max_length) == 0)
+            {
+                response_len = get_cpu_load(data_);
+            }
+            else if(strncmp("mem", data_, max_length) == 0)
+            {
+                response_len = get_mem(data_);
+            }
+            else
+            {
+                // TODO: define tcp response for invalid command?
+                std::cerr << "got command I don't recognize: " << data_ << "\n";
+                snprintf(data_, empty_length + 1, "\n");
+                assert(empty_length == strlen(data_));
+                response_len = empty_length;
+            }
+            std::cout << "data_ is now: " << data_ << "\n";
             boost::asio::async_write(socket_,
-                                     boost::asio::buffer(data_, bytes_transferred),
+                                     boost::asio::buffer(data_, response_len),
                                      boost::bind(&session::handle_write, this,
                                                  boost::asio::placeholders::error));
         }
@@ -60,6 +117,7 @@ private:
         if (!error)
         {
             std::cout << "handle_write\n";
+            std::cout << "data_: " << data_ << "\n";
             socket_.async_read_some(boost::asio::buffer(data_, max_length),
                                     boost::bind(&session::handle_read, this,
                                                 boost::asio::placeholders::error,
@@ -73,7 +131,8 @@ private:
     }
 
     tcp::socket socket_;
-    enum { max_length = 1024 };
+    enum { max_length = 1024,
+           empty_length = 1};
     char data_[max_length];
 };
 
@@ -103,10 +162,12 @@ private:
     {
         if (!error)
         {
+            std::cout << "handle_accept\n";
             new_session->start();
         }
         else
         {
+            std::cout << "handle_accept error\n";
             delete new_session;
         }
 
