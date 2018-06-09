@@ -131,7 +131,41 @@ private:
     // returns the new message length
     int get_mem(char *data)
     {
-        snprintf(data, max_length, "mem usage will go here\n");
+        std::ifstream meminfo("/proc/meminfo");
+        std::string label;
+        std::string memtotal_s = "MemTotal:";
+        std::string memfree_s = "MemFree:";
+        std::string buffers_s = "Buffers:";
+        std::string cached_s = "Cached:";
+        int amount;
+        std::string units;
+        int memtotal, memfree, buffers, cached;
+        bool done = false;
+        while((meminfo >> label >> amount >> units) and !done)
+        {
+            // Would be cooler to use a dictionary (hash in the stl,
+            // if I remember right):
+            if(label == memtotal_s)
+            {
+                memtotal = amount;
+            }
+            else if(label == memfree_s)
+            {
+                memfree = amount;
+            }
+            else if(label == buffers_s)
+            {
+                buffers = amount;
+            }
+            else if(label == cached_s)
+            {
+                cached = amount;
+                done = true;
+            }
+        }
+        snprintf(data, max_length,
+                 "MemTotal %d - MemFree %d - Buffers %d - Cached %d\n",
+                 memtotal, memfree, buffers, cached);
         return strlen(data);
     }
 
