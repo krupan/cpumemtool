@@ -15,12 +15,36 @@
 
 using boost::asio::ip::tcp;
 
+// CPU measurements
+struct cpu_stat
+{
+    int idle;
+    int iowait;
+    int non_idle;
+    int user;
+    int nice;
+    int system;
+    int irq;
+    int soft_irq;
+    int steal;
+    int total;
+};
+
 class session
 {
 public:
     session(boost::asio::io_context& io_context)
         : socket_(io_context)
     {
+        // hand parsed for now:
+        prev_cpu_stat.user = 728425;
+        prev_cpu_stat.nice = 117947;
+        prev_cpu_stat.system = 286913;
+        prev_cpu_stat.idle = 14333965;
+        prev_cpu_stat.iowait = 3232;
+        prev_cpu_stat.irq = 66665;
+        prev_cpu_stat.soft_irq = 31772;
+        prev_cpu_stat.steal = 0;
     }
 
     tcp::socket& socket()
@@ -53,10 +77,57 @@ private:
         return 1;
     }
 
+    // populates everything except non_idle and total (for now?)
+    void get_cpu_stat(struct cpu_stat &cpu_stat)
+    {
+        // TODO: fopen, fread, parse...
+        cpu_stat.user = 728482;
+        cpu_stat.nice = 117947;
+        cpu_stat.system = 286931;
+        cpu_stat.idle = 14335734;
+        cpu_stat.iowait = 3233;
+        cpu_stat.irq = 66669;
+        cpu_stat.soft_irq = 31775;
+        cpu_stat.steal = 0;
+        cpu_stat.non_idle = 0;
+        cpu_stat.total = 0;
+    }
+
+    double calc_cpu_percentage(struct cpu_stat &cpu_stat)
+    {
+        // This is the formula provided here:
+        // https://stackoverflow.com/questions/23367857/accurate-calculation-of-cpu-usage-given-in-percentage-in-linux/
+        // The author of that clarifies in a comment that the load
+        // should be "Percentage of usage from the previous
+        // measurement," so that's what this does.
+        std::cout << "calc_cpu_percentage\n";
+        int actual_prev_idle = prev_cpu_stat.idle + prev_cpu_stat.iowait;
+        int actual_idle = cpu_stat.idle + cpu_stat.iowait;
+
+        int prev_non_idle = prev_cpu_stat.user + prev_cpu_stat.nice + 
+            prev_cpu_stat.system + prev_cpu_stat.irq + prev_cpu_stat.soft_irq +
+            prev_cpu_stat.steal;
+        int non_idle = cpu_stat.user + cpu_stat.nice + cpu_stat.system + 
+            cpu_stat.irq + cpu_stat.soft_irq + cpu_stat.steal;
+
+        int prev_total = actual_prev_idle + prev_non_idle;
+        int total = actual_idle + non_idle;
+
+        // differentiate: actual value minus the previous one
+        double totald = total - prev_total;
+        double idled = actual_idle - actual_prev_idle;
+
+        return ((totald - idled) / totald) * 100;
+    }
+
     // returns the new message length
     int get_cpu_load(char *data)
     {
-        snprintf(data, max_length, "cpu load will go here\n");
+        struct cpu_stat cpu_stat;
+        get_cpu_stat(cpu_stat);
+        double cpu_percentage = calc_cpu_percentage(cpu_stat);
+        // TODO: round to some number of decimal places?
+        snprintf(data, max_length, "%f\n", cpu_percentage);
         return strlen(data);
     }
 
@@ -134,6 +205,7 @@ private:
     enum { max_length = 1024,
            empty_length = 1};
     char data_[max_length];
+    struct cpu_stat prev_cpu_stat;
 };
 
 class server
