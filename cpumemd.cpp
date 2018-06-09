@@ -10,6 +10,7 @@
 #include <assert.h>
 #include <cstdlib>
 #include <iostream>
+#include <fstream>
 #include <boost/bind.hpp>
 #include <boost/asio.hpp>
 
@@ -18,16 +19,14 @@ using boost::asio::ip::tcp;
 // CPU measurements
 struct cpu_stat
 {
-    int idle;
-    int iowait;
-    int non_idle;
     int user;
     int nice;
     int system;
+    int idle;
+    int iowait;
     int irq;
     int soft_irq;
     int steal;
-    int total;
 };
 
 class session
@@ -77,20 +76,16 @@ private:
         return 1;
     }
 
-    // populates everything except non_idle and total (for now?)
+    // populates everything except non_idle and total, and only
     void get_cpu_stat(struct cpu_stat &cpu_stat)
     {
-        // TODO: fopen, fread, parse...
-        cpu_stat.user = 728482;
-        cpu_stat.nice = 117947;
-        cpu_stat.system = 286931;
-        cpu_stat.idle = 14335734;
-        cpu_stat.iowait = 3233;
-        cpu_stat.irq = 66669;
-        cpu_stat.soft_irq = 31775;
-        cpu_stat.steal = 0;
-        cpu_stat.non_idle = 0;
-        cpu_stat.total = 0;
+        std::ifstream stat("/proc/stat");
+        // throwaway field:
+        std::string cpu;
+        // just read the first line, which is all cpus together:
+        stat >> cpu >> cpu_stat.user >> cpu_stat.nice >> cpu_stat.system >>
+            cpu_stat.idle >> cpu_stat.iowait >> cpu_stat.irq >>
+            cpu_stat.soft_irq >> cpu_stat.steal;
     }
 
     double calc_cpu_percentage(struct cpu_stat &cpu_stat)
@@ -104,10 +99,10 @@ private:
         int actual_prev_idle = prev_cpu_stat.idle + prev_cpu_stat.iowait;
         int actual_idle = cpu_stat.idle + cpu_stat.iowait;
 
-        int prev_non_idle = prev_cpu_stat.user + prev_cpu_stat.nice + 
+        int prev_non_idle = prev_cpu_stat.user + prev_cpu_stat.nice +
             prev_cpu_stat.system + prev_cpu_stat.irq + prev_cpu_stat.soft_irq +
             prev_cpu_stat.steal;
-        int non_idle = cpu_stat.user + cpu_stat.nice + cpu_stat.system + 
+        int non_idle = cpu_stat.user + cpu_stat.nice + cpu_stat.system +
             cpu_stat.irq + cpu_stat.soft_irq + cpu_stat.steal;
 
         int prev_total = actual_prev_idle + prev_non_idle;
@@ -126,6 +121,8 @@ private:
         struct cpu_stat cpu_stat;
         get_cpu_stat(cpu_stat);
         double cpu_percentage = calc_cpu_percentage(cpu_stat);
+        // save cpu stat as prev_cpu_stat
+        prev_cpu_stat = cpu_stat;
         // TODO: round to some number of decimal places?
         snprintf(data, max_length, "%f\n", cpu_percentage);
         return strlen(data);
