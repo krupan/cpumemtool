@@ -2,6 +2,7 @@ CFLAGS=-g -Wall -Wextra -Wno-unused-parameter -Werror -fsanitize=undefined \
 	-fsanitize=address -fno-sanitize-recover
 
 OUTDIR=bin
+$(shell mkdir -p $(OUTDIR))
 
 all: $(OUTDIR)/cpumemd $(OUTDIR)/cpumemtool
 
