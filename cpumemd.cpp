@@ -25,18 +25,11 @@ struct cpu_stat
 class session
 {
 public:
-    session(boost::asio::io_context& io_context)
-        : socket_(io_context)
+    session(boost::asio::io_context& io_context,
+            struct cpu_stat &prev_cpu_stat)
+        : socket_(io_context),
+          prev_cpu_stat(prev_cpu_stat)
     {
-        // hand parsed for now:
-        prev_cpu_stat.user = 728425;
-        prev_cpu_stat.nice = 117947;
-        prev_cpu_stat.system = 286913;
-        prev_cpu_stat.idle = 14333965;
-        prev_cpu_stat.iowait = 3232;
-        prev_cpu_stat.irq = 66665;
-        prev_cpu_stat.soft_irq = 31772;
-        prev_cpu_stat.steal = 0;
     }
 
     tcp::socket& socket()
@@ -86,8 +79,15 @@ private:
         // https://stackoverflow.com/questions/23367857/accurate-calculation-of-cpu-usage-given-in-percentage-in-linux/
         // The author of that clarifies in a comment that the load
         // should be "Percentage of usage from the previous
-        // measurement," so that's what this does.
-        std::cout << "calc_cpu_percentage\n";
+        // measurement," so that's what this does.  If there was no
+        // previous measurement the results won't make sense, but
+        // every other measurement after that will be fine.  I suppose
+        // for the first measurement we could read /proc/stat, sleep
+        // for a second or two, then read /proc/stat again and get an
+        // accurate measurement.  I'm not sure if the user would
+        // prefer that over just querying twice themselves to get the
+        // first accurate measurement, so I'm leaving it this way for
+        // now.
         int actual_prev_idle = prev_cpu_stat.idle + prev_cpu_stat.iowait;
         int actual_idle = cpu_stat.idle + cpu_stat.iowait;
 
@@ -222,7 +222,7 @@ private:
     enum { max_length = 1024,
            empty_length = 1};
     char data_[max_length];
-    struct cpu_stat prev_cpu_stat;
+    struct cpu_stat &prev_cpu_stat;
 };
 
 class server
@@ -238,8 +238,7 @@ public:
 private:
     void start_accept()
     {
-        std::cout << "start_accept\n";
-        session* new_session = new session(io_context_);
+        session* new_session = new session(io_context_, prev_cpu_stat);
         acceptor_.async_accept(new_session->socket(),
                                boost::bind(&server::handle_accept, this, new_session,
                                            boost::asio::placeholders::error));
@@ -262,6 +261,9 @@ private:
 
     boost::asio::io_context& io_context_;
     tcp::acceptor acceptor_;
+    // can't have this local to the session because we want to retain
+    // this across connections/sessions:
+    struct cpu_stat prev_cpu_stat = {};
 };
 
 int main(int argc, char* argv[])
