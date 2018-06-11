@@ -46,7 +46,6 @@ public:
 
     void start()
     {
-        std::cout << "start\n";
         socket_.async_read_some(boost::asio::buffer(data_, max_length),
                                 boost::bind(&session::handle_read, this,
                                             boost::asio::placeholders::error,
@@ -168,7 +167,6 @@ private:
         if (!error)
         {
             size_t response_len;
-            std::cout << "handle_read, bytes_transferred: " << bytes_transferred << "\n";
             int err = input_to_string(data_);
             if(err)
             {
@@ -178,7 +176,6 @@ private:
                 assert(empty_length == strlen(data_));
                 response_len = empty_length;
             }
-            std::cout << "data_: " << data_ << "\n";
             if(strncmp("cpu", data_, max_length) == 0)
             {
                 response_len = get_cpu_load(data_);
@@ -195,7 +192,6 @@ private:
                 assert(empty_length == strlen(data_));
                 response_len = empty_length;
             }
-            std::cout << "data_ is now: " << data_ << "\n";
             boost::asio::async_write(socket_,
                                      boost::asio::buffer(data_, response_len),
                                      boost::bind(&session::handle_write, this,
@@ -211,8 +207,6 @@ private:
     {
         if (!error)
         {
-            std::cout << "handle_write\n";
-            std::cout << "data_: " << data_ << "\n";
             socket_.async_read_some(boost::asio::buffer(data_, max_length),
                                     boost::bind(&session::handle_read, this,
                                                 boost::asio::placeholders::error,
@@ -220,7 +214,6 @@ private:
         }
         else
         {
-            std::cout << "handle_write with error\n";
             delete this;
         }
     }
@@ -239,7 +232,6 @@ public:
         : io_context_(io_context),
           acceptor_(io_context, tcp::endpoint(tcp::v4(), port))
     {
-        std::cout << "server\n";
         start_accept();
     }
 
@@ -258,12 +250,10 @@ private:
     {
         if (!error)
         {
-            std::cout << "handle_accept\n";
             new_session->start();
         }
         else
         {
-            std::cout << "handle_accept error\n";
             delete new_session;
         }
 
